@@ -1,0 +1,20 @@
+{
+  "name": "kq",
+  "version": "1.0.0",
+  "description": "自动化截取刷卡资料",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alex632/kq.git"
+  },
+  "author": "alex_huang@wistron.com",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/alex632/kq/issues"
+  },
+  "homepage": "https://github.com/alex632/kq#readme"
+}
