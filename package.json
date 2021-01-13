@@ -1,5 +1,5 @@
 {
-  "name": "kq",
+  "name": "kq2",
   "version": "1.0.0",
   "description": "自动化截取刷卡资料",
   "main": "index.js",
@@ -9,12 +9,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alex632/kq.git"
+    "url": "git+https://github.com/alex632/kq2.git"
   },
   "author": "alex_huang@wistron.com",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/alex632/kq/issues"
+    "url": "https://github.com/alex632/kq2/issues"
   },
-  "homepage": "https://github.com/alex632/kq#readme"
+  "homepage": "https://github.com/alex632/kq2#readme"
 }

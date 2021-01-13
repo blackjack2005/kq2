@@ -333,4 +333,9 @@ function askAll() {
     function() { console.log("All done.") } )))));
 }
 
-openLoginPage();    // Where it all begins.
+(function() {
+    fs.mkdir("./tmp", ()=>{
+        console.log("Rock and Roll");
+        openLoginPage();
+    })
+})();

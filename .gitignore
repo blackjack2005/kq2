@@ -103,5 +103,5 @@ dist
 # TernJS port file
 .tern-port
 
-# execution output files
-tmp/*.html
+# Execution output files
+/tmp/
