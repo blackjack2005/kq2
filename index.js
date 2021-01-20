@@ -20,12 +20,14 @@ const ce = {    // single global variable
 };
 //var _ASPNET_SessionId;
 //var _ASPNetRecycleSession;
+var bytesGot = 0;
 
 function openLoginPage() {
     return new Promise( (resolve, reject) => {
         let req = http.request("http://twhratsql.whq.wistron/OGWeb/LoginForm.aspx", response => {
             let chunks = [];
             response.addListener('data', (chunk) => {
+                bytesGot += chunk.byteLength;
                 chunks.push(chunk);
             });
             response.on('end', () => {
@@ -92,6 +94,7 @@ function login() {
         }, response => {
             let chunks = [];
             response.on('data', chunk => {
+                bytesGot += chunk.byteLength;
                 chunks.push(chunk);
             });
             response.on('end', () => {
@@ -139,7 +142,8 @@ function step3() {
             }
         }, response => {
             let chunks = [];
-            response.addListener('data', (chunk) => {
+            response.on('data', (chunk) => {
+                bytesGot += chunk.byteLength;
                 chunks.push(chunk);
             });
             response.on('end', () => {
@@ -189,6 +193,7 @@ async function initialize() {
         return step3();
     }).then( result => {
         console.log(`Step3 done and we got Element _ASPNetRecycleSession: ${result._ASPNetRecycleSession} Element __VIEWSTATE: \x1b[32momitted\x1b[0m Element __EVENTVALIDATION: \x1b[32momitted\x1b[0m`);
+        console.log(`${bytesGot} bytes received during step1~3.`);
     }).catch(e=>{throw e});
 }
 
@@ -243,6 +248,7 @@ function inquire0(beginDate, endDate, employeeIdOrName, nextPage) {
         }, (response) => {
             let chunks = [];
             response.on('data', (chunk) => {
+                bytesGot += chunk.byteLength;
                 chunks.push(chunk);
             });
             response.on('end', () => {
@@ -444,34 +450,41 @@ function traverse(itms) {
  */
 function checkOne(theDay, dpt, eid, name, tl1, tl2, itms) {
     let status = "";
+    let cls = "";
     function judge() {
         let t1 = new Date(theDay+" "+signIn);
         if ( t1 > tl1 ) {
             status = "遲到";
+            cls = "late-arrival";
         }
         if ( !signOut ) {
             if (status) { status += "/"; }
             status += "只刷一次";
+            if (cls) { cls += " "; }
+            cls += "only-once";
             return;
         }
         let t2 = new Date(theDay+" "+signOut);
         if ( t2 < tl2 ) {
             if (status) { status += "/"; }
             status += "早退";
+            if (cls) { cls += " "; }
+            cls += "early-leave";
         }
         if ( (t2-t1) < (9*60*60-59)*1000 ) {
             if (status) { status += "/"; }
             status += "工时不足";
+            if (cls) { cls += " "; }
+            cls += "insufficient";
         }
         if ( !status ) {
             status = "正常";
         }
     }
-    let signIn, signOut;
-    let cssStatus = "";
-    if ( itms.length === 0 ) {
+    let signIn = "", signOut = "";
+    if ( itms.length === 0 ) {  // NOTE: valid only for request one by one
         status = "请假";
-        cssStatus = "absent";
+        cls = "absent";
     } else {
         name = itms[0][2];
         dpt = itms[0][0];
@@ -491,68 +504,90 @@ function checkOne(theDay, dpt, eid, name, tl1, tl2, itms) {
         //report += "";
     } else {
         console.log(`${dpt} ${eid} ${name} ${theDay}: \x1b[41m%s\x1b[0m`, status); // BgRed for status then reset
-        let yy = `<td>${dpt}</td><td>${eid}</td><td>${name}</td><td class=${cssStatus} title="${signIn} ~ ${signOut}">${status}</td>`;
+        //let yy = `<td>${dpt}</td><td>${eid}</td><td>${name}</td><td class=${cssStatus} title="${signIn} ~ ${signOut}">${status}</td>`;
     }
+    return {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, signOut:signOut};
 }
 
 var wsh = [
-    ["TMP8106062", "黄世勇"],	// 上海軟體開發處
-    ["S0109003", "徐应军"],
-    ["S0107011", "林波"],   // 軟件一部
-    ["S0203002", "郑晓雁"],
-    ["S0607002", "汤晓莉"],
-    ["S0609001", "裘佳"],
-    ["S1005001", "夏斯宏"],
-    ["S1007002", "杨晴"],
-    ["S1105001", "戴运杰"],
-    ["S0108001", "杨清鞠"],
-    ["S1007004", "王雅娟"],
-    ["S2101001", "张悦"],
-    ["S9807008", "胡海良"], // 軟件五部
-    ["S9907004", "周敏"],
-    ["S0607001", "孙松"],
-    ["S0712002", "张松涛"],
-    ["S1001001", "花春荣"],
-    ["S1607001", "刘晴晴"],
-    ["S1702001", "张佳峰"],
-    ["S1903001", "吴永辉"],
-    ["S1905001", "李旭超"],
-    ["S1907001", "王洪元"],
-    ["S2007001", "程杰"],
-    ["S0511001", "张翀"],	// 軟件六部
-    ["S1109002", "庞美静"],
-    ["S1606004", "潘远生"],
-    ["S1703004", "袁琼"],
-    ["S1907003", "卢奕粲"],
-    ["S1907002", "杨文静"],
-    ["S2003001", "庄银环"],
-    ["S2005001", "陳夢宇"],
-    ["S2006001", "李伟捷"],
-    ["S2008001", "刘毅炫"],
-    ["S2009001", "丁达诚"],
-    ["S2011001", "余圣骏"],
-    ["S2012001", "齐芮萌"],
-    ["S0008020", "冼策"],	// 軟件七部
-    ["S0905001", "张巧平"],
-    ["S1706003", "李超"],
-    ["S1707002", "刘诗倩"],
-    ["S2004001", "姜超"],
-    ["S2004002", "胡栩搴"],
-    ["S2008003", "杨欢"],
-    ["TMP8410009", "刘皇辰"],	// 人力資源
-    ["S9710008", "陈芸淑"],
-    ["S0404001", "邬承辉"],
-    ["S1705001", "单佳佳"],
-    ["S0004007", "梁洁"],	// 財務
-    ["S9912003", "闵靖"],	// 質量保證室
-    ["S2008002", "葛承军"]	// 專案管理室
+    ["8SS000", "TMP8106062", "黄世勇"],	// 上海軟體開發處
+    ["8SS000", "S0109003", "徐应军"],
+    ["8SS100", "S0107011", "林波"],   // 軟件一部
+    ["8SS100", "S0203002", "郑晓雁"],
+    ["8SS100", "S0607002", "汤晓莉"],
+    ["8SS100", "S0609001", "裘佳"],
+    ["8SS100", "S1005001", "夏斯宏"],
+    ["8SS100", "S1007002", "杨晴"],
+    ["8SS100", "S1105001", "戴运杰"],
+    ["8SS100", "S0108001", "杨清鞠"],
+    ["8SS100", "S1007004", "王雅娟"],
+    ["8SS100", "S2101001", "张悦"],
+    ["8SS500", "S9807008", "胡海良"], // 軟件五部
+    ["8SS500", "S9907004", "周敏"],
+    ["8SS500", "S0607001", "孙松"],
+    ["8SS500", "S0712002", "张松涛"],
+    ["8SS500", "S1001001", "花春荣"],
+    ["8SS500", "S1607001", "刘晴晴"],
+    ["8SS500", "S1702001", "张佳峰"],
+    ["8SS500", "S1903001", "吴永辉"],
+    ["8SS500", "S1905001", "李旭超"],
+    ["8SS500", "S1907001", "王洪元"],
+    ["8SS500", "S2007001", "程杰"],
+    ["8SS600", "S0511001", "张翀"],   // 軟件六部
+    ["8SS600", "S1109002", "庞美静"],
+    ["8SS600", "S1606004", "潘远生"],
+    ["8SS600", "S1703004", "袁琼"],
+    ["8SS600", "S1907003", "卢奕粲"],
+    ["8SS600", "S1907002", "杨文静"],
+    ["8SS600", "S2003001", "庄银环"],
+    ["8SS600", "S2005001", "陳夢宇"],
+    ["8SS600", "S2006001", "李伟捷"],
+    ["8SS600", "S2008001", "刘毅炫"],
+    ["8SS600", "S2009001", "丁达诚"],
+    ["8SS600", "S2011001", "余圣骏"],
+    ["8SS600", "S2012001", "齐芮萌"],
+    ["8SS700", "S0008020", "冼策"],   // 軟件七部
+    ["8SS700", "S0905001", "张巧平"],
+    ["8SS700", "S1706003", "李超"],
+    ["8SS700", "S1707002", "刘诗倩"],
+    ["8SS700", "S2004001", "姜超"],
+    ["8SS700", "S2004002", "胡栩搴"],
+    ["8SS700", "S2008003", "杨欢"],
+    ["MT0H00", "TMP8410009", "刘皇辰"],	// 人力資源
+    ["MT0H00", "S9710008", "陈芸淑"],
+    ["MT0H00", "S0404001", "邬承辉"],
+    ["MT0H00", "S1705001", "单佳佳"],
+    ["MT0F00", "S0004007", "梁洁"],   // 財務
+    ["MT0Q00", "S9912003", "闵靖"],   // 質量保證室
+    ["NMMR00", "S2008002", "葛承军"]  // 專案管理室
 ];
 
-function askAll() {
+var records = [];
+
+async function askAll() {
+    if ( baseline.length === 0 ) {
+        console.error("Are you kidding me?");
+        return;
+    }
+    await initialize();
+    console.log("");
+    if ( !records.length ) {
+        for (let i=0; i < wsh.length; i++) {
+            records.push([]);
+            for (let j=0; j < baseline.length; j++) {
+                let r = {dpt:wsh[i][0], eid:wsh[i][1], name:wsh[i][2], status:"请假", cls:"absent", signIn:"", singOut:""};
+                records[i].push(r);
+            }
+        }
+    }
+
     // Department EID Name Day Time
     // Sort by Day, Department, EID, Time in ascending order.
+    //let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
+    // Sort by EID, Day, Time in ascending order.
     let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
-    inquire('2021-1-11', '2021-1-11', '').then(items=>{
+    inquire(baseline[0].day.toLocaleDateString(), baseline[baseline.length-1].day.toLocaleDateString(), '').then(items=>{
+        console.log(`inquire ${baseline[0].day.toLocaleDateString()} ~ ${baseline[baseline.length-1].day.toLocaleDateString()} all people`);    // DEBUG
         //console.log(items);
         items.sort( cmp );
         //console.log(items);
@@ -560,50 +595,39 @@ function askAll() {
     }, e=>{console.log(e)});
 }
 
-async function askOneByOne(day1, day2) {
+async function askOneByOne() {
+    if ( baseline.length === 0 ) {
+        console.error("Are you kidding me?");
+        return;
+    }
     await initialize();
     console.log("");
-    let theDay = '2021-1-15';
-    let t11 = new Date(`${theDay} 08:50:59`);   // 上班打卡时限 08:50:59
-    let tl2 = new Date(`${theDay} 16:50:00`);   // 下班打卡时限 16:50:00
-    let report = `<!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="UTF-8">
-    <title>考勤 ${theDay}</title>
-    <style>
-        .absent {
-            background-color: red;
+    if ( !records.length ) {
+        for (let i=0; i < wsh.length; i++) {
+            records.push([]);
         }
-        .late-arrival, early-leave, .insufficient {
-            background-color: yellow;
+    }
+    for (let i=0; i < baseline.length; i++) {
+        // day.toLocaleString() -> '1/18/2021, 12:00:00 AM'  // NOTE: what if locale changed?
+        let theDay = baseline[i].day.toLocaleDateString();
+        //console.log(`do ${theDay} ${baseline[i].tl1.toLocaleString()} ${baseline[i].tl2.toLocaleString()}`);
+        let tl1 = baseline[i].tl1;
+        let tl2 = baseline[i].tl2;
+        //fo.write(report);
+        //fo.end();
+        for (let i=0; i < wsh.length; i++) {
+            await inquire(theDay, theDay, wsh[i][1]).then(items=>{
+                // Department EID Name Day Time
+                // Sort by Day and Time in ascending order.
+                // items.sort( (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[4]<b[4]?-1:1) );
+                let r = checkOne(theDay, wsh[i][0], wsh[i][1], wsh[i][2], tl1, tl2, items);
+                // {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, singOut:signOut}
+                records[i].push(r);
+            }, e=>{throw e});
         }
-        .only-once {
-            background-color: magenta;
-        }
-        th {
-            background-color: cyan;
-        }
-    </style>
-    </head>
-    <body>
-    <table border="1">
-        <tr>
-            <th>部门</th><th>工号</th><th>姓名</th><th title="2021/1/15 周五">1/15</th>
-        </tr>
-        <tr>`;
-    let fo = fs.createWriteStream('tmp/result.html');
-    fo.write(report);
-    fo.end();
-    for (let i=0; i < wsh.length; i++) {
-        await inquire(theDay, theDay, wsh[i][0]).then(items=>{
-            // Department EID Name Day Time
-            // Sort by Day and Time in ascending order.
-            // items.sort( (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[4]<b[4]?-1:1) );
-            checkOne(theDay, '8SS000', wsh[i][0], wsh[i][1], t11, tl2, items);
-        }, e=>{throw e});
     }
 }
+
 const dayNames = [
     "周日",
     "周一",
@@ -612,9 +636,12 @@ const dayNames = [
     "周四",
     "周五",
     "周六"
-]
-function makeTitle(day1, day2) {
-    let reportTemplate = 
+];
+
+var baseline = [];
+
+function makeTitle(fo, day1, day2) {
+    let reportTemplate =
 `<!DOCTYPE html>
 <html>
 <head>
@@ -642,9 +669,7 @@ function makeTitle(day1, day2) {
 <table border="1">
 \t<tr>
 \t\t<th>部门</th><th>工号</th><th>姓名</th>`;
-    let fo = fs.createWriteStream('tmp/result.html');
     fo.write(reportTemplate);
-    //fo.end();
     Date.prototype.addDays=function(d){return new Date(this.valueOf()+864e5*d);};
     let dayX = new Date(day1);
     let dayEnd = new Date(day2);
@@ -653,26 +678,70 @@ function makeTitle(day1, day2) {
         let month = dayX.getMonth()+1;
         let day = dayX.getDate();
         let wd = dayX.getDay();
-        let title = `${year}/${month}/${day} ${dayNames[wd]}`;
         let cnt = `${month}/${day}`;
+        let title = `${year}/${cnt} ${dayNames[wd]}`;
         let cls = (1<=wd&&wd<=5) ? "weekday" : "weekend";
         // <th title="2021/1/13 周三" class="weekday">1/13</th>
         fo.write(`<th title="${title}" class="${cls}">${cnt}</th>`);
+        let tl1 = new Date(dayX);
+        let tl2 = new Date(dayX);
+        tl1.setHours(8);    // 上班打卡时限 08:50:59
+        tl1.setMinutes(50);
+        tl1.setSeconds(59);
+        tl2.setHours(16);   // 下班打卡时限 16:50:00
+        tl2.setMinutes(50);
+        tl2.setSeconds(0);
+        baseline.push({day:dayX, tl1:tl1, tl2:tl2});
         dayX = dayX.addDays(1);
     }
     fo.write("\n\t</tr>\n");
-    fo.end("</table>\n</body>\n</html>");
 }
 
-(function() {
+function report(fo) {
+    for (let i=0; i < wsh.length; i++) {
+        let dpt = wsh[i][0];    // initial department name
+        let name = wsh[i][2];   // initial name
+        fo.write("\t<tr>\n");
+        for (let j=0; j < baseline.length; j++) {
+            if ( records[i][j].dpt !== dpt ) {
+                dpt = records[i][j].dpt;    // Override the default
+                name = records[i][j].name;
+                break;
+            }
+        }
+        fo.write(`\t\t<td>${dpt}</td><td>${wsh[i][1]}</td><td>${name}</td>`);
+        for (let j=0; j < baseline.length; j++) {
+            let r = records[i][j];
+            fo.write(`<td title="${r.signIn} ~ ${r.signOut}" class="${r.cls}">${r.status}</td>`);
+            // {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, singOut:signOut}
+        }
+        fo.write("\n\t</tr>\n");
+    }
+}
+
+(async function() {
     fs.mkdir("./tmp", ()=>{
         console.log("Rock and Roll");
+        let t1 = new Date();
         try {
-            //askOneByOne('2021-1-15', '2021-1-18');
-            makeTitle('2021-1-13', '2021-1-18');
+            let fo = fs.createWriteStream('tmp/result.html');
+            let dayBegin = '2021-1-4';
+            let dayEnd = '2021-1-18';
+            makeTitle(fo, dayBegin, dayEnd);
+            askOneByOne().then( ()=>{
+                report(fo);
+                fo.end("</table>\n</body>\n</html>");
+                let t2 = new Date();
+                console.log(`${bytesGot} bytes received.`);
+                console.log(`Work from ${t1.toLocaleString()} to ${t2.toLocaleString()} used ${(t2-t1)/1000} seconds.`);
+            }).catch(e=>{
+                console.log("Exception caught.");
+                console.error(e);
+                console.log("Exception reported.");
+            });
             //askAll();
         } catch (e) {
-            console.warn(e);
+            console.warn(e);    // Useless? Why?
         }
     })
 })();
