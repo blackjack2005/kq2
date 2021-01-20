@@ -256,11 +256,11 @@ function inquire0(beginDate, endDate, employeeIdOrName, nextPage) {
                 let html = buff.toString();
                 if ( response.statusCode === 200 ) {
                     let result = parseKQ(html);
-                    /*
+                    /**/
                     let fo = fs.createWriteStream(`tmp/step4-inquire-${employeeIdOrName}-${result.curPage}.html`);
                     fo.write(html);
                     fo.end();
-                    */
+                    /**/
                     resolve(result);
                 } else {
                     let msg = `Inquiry HTTP error: ${response.statusMessage}`;
@@ -278,6 +278,13 @@ function inquire0(beginDate, endDate, employeeIdOrName, nextPage) {
     });
 }
 
+/**
+ * 
+ * @param {*} n 
+ * @param {*} width 
+ * @param {*} z 
+ * @return {string}
+ */
 function pad(n, width, z) {
     z = z || '0';
     n = n + '';
@@ -397,44 +404,121 @@ function judge(theDay, signIn, signOut) {
     return status;
 }
 
+function findOnePersonRecords(itms, idx1) {
+    let x1, x2;
+    if ( idx1 >= itms.length ) {
+        return null;
+    }
+    x1 = idx1;
+    let eid = itms[x1][1];
+    for (x2 = x1+1; x2 < itms.length; x2++) {
+        if ( itms[x2][1] !== eid ) {
+            break;
+        }
+    }
+    return {x1: x1, x2: x2};
+}
+
+function identifyPerson(eid) {
+    for (let i = 0; i < wsh.length; i++) {
+        if ( wsh[i][1] === eid ) {
+            return i;
+        }
+    }
+    return null;
+}
+
+function findCalendar(dayStr) {
+    for (let i = 0; i < baseline.length; i++) {
+        if ( baseline[i].ds === dayStr ) {
+            return i;
+        }
+    }
+    return null;
+}
+
+function findOneDayRecords(x1, x2, itms) {
+    let ds = itms[x1][3];
+    let i = x1 + 1;
+    for (; i < x2; i++) {
+        if ( itms[i][3] !== ds ) {
+            break;
+        }
+    }
+    return i;
+}
+
+function judge1Day(theDay, signIn, signOut, tl1, tl2) {
+    let status = "";
+    let cls = "";
+    let t1 = new Date(theDay+" "+signIn);
+    if ( t1 > tl1 ) {
+        status = "遲到";
+        cls = "late-arrival";
+    }
+    if ( !signOut ) {
+        if (status) { status += "/"; }
+        status += "只刷一次";
+        if (cls) { cls += " "; }
+        cls += "only-once";
+        return {status:status, cls:cls};
+    }
+    let t2 = new Date(theDay+" "+signOut);
+    if ( t2 < tl2 ) {
+        if (status) { status += "/"; }
+        status += "早退";
+        if (cls) { cls += " "; }
+        cls += "early-leave";
+    }
+    if ( (t2-t1) < (9*60*60-59)*1000 ) {
+        if (status) { status += "/"; }
+        status += "工时不足";
+        if (cls) { cls += " "; }
+        cls += "insufficient";
+    }
+    if ( !status ) {
+        status = "正常";
+    }
+    return {status:status, cls:cls};
+}
+
+
+function judgeOne(pr, itms) {
+    let px = identifyPerson(itms[pr.x1][1]);
+    if ( px == null ) {
+        console.log(`Who is this guy ${itms[pr.x1][1]} ${itms[pr.x1][2]} ?`)
+        return;
+    }
+    // Traverse on person's records.
+    for (let i = pr.x1; i < pr.x2; i++) {
+        let dx = findCalendar(itms[i][3]);
+        if ( dx !== null ) {
+            let signIn = itms[i][4];
+            let signOut = "";
+            let t2 = findOneDayRecords(i, pr.x2, itms);
+            if ( t2 - i >= 2 ) {
+                signOut = itms[t2-1][4];
+            }
+            let r = judge1Day(itms[i][3], signIn, signOut, baseline[dx].tl1, baseline[dx].tl2);
+            let r2 = {dpt:itms[i][0], name:itms[i][2], status:r.status, cls:r.cls, signIn:signIn, singOut:signOut};
+            records[px][dx] = r2;
+            i = t2;
+        } else {
+            i = findOneDayRecords(i, pr.x2, itms);  // Skip this day's records. Not likely.
+        }
+    }
+}
+
 function traverse(itms) {
-    function judge2() {
-        let status = judge(theDay, signIn, signOut);
-        if ( status === "正常" ) {
-            console.log(`${itms[i-1][0]} ${eid} ${name} ${theDay}: ${status}`);
-        } else {
-            console.log(`${itms[i-1][0]} ${eid} ${name} ${theDay}: \x1b[41m%s\x1b[0m`, status); // BgRed for status then reset
+    // Sort by EID, Day, Time in ascending order.
+    let idx1 = 0;
+    while (true) {
+        let pr = findOnePersonRecords(itms, idx1);
+        if ( !pr ) {
+            break;
         }
-    }
-    let eid = "", name = "";
-    let signIn = "", signOut = "";
-    let theDay = "";
-    let i=0;
-    for (; i < itms.length; i++) {
-        if ( itms[i][1] !== eid ) {
-            if ( eid ) {
-                judge2();
-            }
-            // Got a new person.
-            eid = itms[i][1];
-            name = itms[i][2];
-            theDay = itms[i][3];
-            signIn = itms[i][4];
-            signOut = "";
-        } else {
-            if ( itms[i][3] !== theDay ) {
-                // The person gets to the other day.
-                judge2();
-                theDay = itms[i][3];
-                signIn = itms[i][4];
-                signOut = "";
-            } else {
-                signOut = itms[i][4];
-            }
-        }
-    }
-    if ( eid ) {
-        judge2();
+        judgeOne(pr, itms);
+        idx1 = pr.x2;
     }
 }
 
@@ -506,7 +590,7 @@ function checkOne(theDay, dpt, eid, name, tl1, tl2, itms) {
         console.log(`${dpt} ${eid} ${name} ${theDay}: \x1b[41m%s\x1b[0m`, status); // BgRed for status then reset
         //let yy = `<td>${dpt}</td><td>${eid}</td><td>${name}</td><td class=${cssStatus} title="${signIn} ~ ${signOut}">${status}</td>`;
     }
-    return {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, signOut:signOut};
+    return {dpt:dpt, name:name, status:status, cls:cls, signIn:signIn, signOut:signOut};
 }
 
 var wsh = [
@@ -562,7 +646,7 @@ var wsh = [
     ["NMMR00", "S2008002", "葛承军"]  // 專案管理室
 ];
 
-var records = [];
+var records;
 
 async function askAll() {
     if ( baseline.length === 0 ) {
@@ -571,28 +655,26 @@ async function askAll() {
     }
     await initialize();
     console.log("");
-    if ( !records.length ) {
-        for (let i=0; i < wsh.length; i++) {
-            records.push([]);
-            for (let j=0; j < baseline.length; j++) {
-                let r = {dpt:wsh[i][0], eid:wsh[i][1], name:wsh[i][2], status:"请假", cls:"absent", signIn:"", singOut:""};
-                records[i].push(r);
-            }
+    records = [];
+    for (let i=0; i < wsh.length; i++) {
+        records.push([]);
+        for (let j=0; j < baseline.length; j++) {
+            let r = {dpt:wsh[i][0], eid:wsh[i][1], name:wsh[i][2], status:"请假", cls:"absent", signIn:"", singOut:""};
+            records[i].push(r);
         }
     }
 
-    // Department EID Name Day Time
     // Sort by Day, Department, EID, Time in ascending order.
-    //let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
+//  let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
     // Sort by EID, Day, Time in ascending order.
-    let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
-    inquire(baseline[0].day.toLocaleDateString(), baseline[baseline.length-1].day.toLocaleDateString(), '').then(items=>{
+    let cmp = (a, b) => a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[4]<b[4]?-1:1));
+    await inquire(baseline[0].day.toLocaleDateString(), baseline[baseline.length-1].day.toLocaleDateString(), '').then(items=>{
         console.log(`inquire ${baseline[0].day.toLocaleDateString()} ~ ${baseline[baseline.length-1].day.toLocaleDateString()} all people`);    // DEBUG
         //console.log(items);
         items.sort( cmp );
-        //console.log(items);
+        console.log(items);
         traverse(items);
-    }, e=>{console.log(e)});
+    }, e=>{throw e});
 }
 
 async function askOneByOne() {
@@ -602,10 +684,9 @@ async function askOneByOne() {
     }
     await initialize();
     console.log("");
-    if ( !records.length ) {
-        for (let i=0; i < wsh.length; i++) {
-            records.push([]);
-        }
+    records = [];
+    for (let i=0; i < wsh.length; i++) {
+        records.push([]);
     }
     for (let i=0; i < baseline.length; i++) {
         // day.toLocaleString() -> '1/18/2021, 12:00:00 AM'  // NOTE: what if locale changed?
@@ -617,11 +698,8 @@ async function askOneByOne() {
         //fo.end();
         for (let i=0; i < wsh.length; i++) {
             await inquire(theDay, theDay, wsh[i][1]).then(items=>{
-                // Department EID Name Day Time
-                // Sort by Day and Time in ascending order.
-                // items.sort( (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[4]<b[4]?-1:1) );
                 let r = checkOne(theDay, wsh[i][0], wsh[i][1], wsh[i][2], tl1, tl2, items);
-                // {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, singOut:signOut}
+                // {dpt:dpt, name:name, status:status, cls:cls, signIn:signIn, singOut:signOut}
                 records[i].push(r);
             }, e=>{throw e});
         }
@@ -691,7 +769,7 @@ function makeTitle(fo, day1, day2) {
         tl2.setHours(16);   // 下班打卡时限 16:50:00
         tl2.setMinutes(50);
         tl2.setSeconds(0);
-        baseline.push({day:dayX, tl1:tl1, tl2:tl2});
+        baseline.push({day:dayX, tl1:tl1, tl2:tl2, ds: year+'/'+pad(month,2)+'/'+pad(day,2)});
         dayX = dayX.addDays(1);
     }
     fo.write("\n\t</tr>\n");
@@ -725,10 +803,11 @@ function report(fo) {
         let t1 = new Date();
         try {
             let fo = fs.createWriteStream('tmp/result.html');
-            let dayBegin = '2021-1-4';
-            let dayEnd = '2021-1-18';
+            let dayBegin = '2020-11-9';
+            let dayEnd = '2020-11-10';
             makeTitle(fo, dayBegin, dayEnd);
-            askOneByOne().then( ()=>{
+            //askOneByOne().then( ()=>{
+            askAll().then( ()=>{
                 report(fo);
                 fo.end("</table>\n</body>\n</html>");
                 let t2 = new Date();
@@ -739,7 +818,6 @@ function report(fo) {
                 console.error(e);
                 console.log("Exception reported.");
             });
-            //askAll();
         } catch (e) {
             console.warn(e);    // Useless? Why?
         }
