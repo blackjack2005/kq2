@@ -256,11 +256,11 @@ function inquire0(beginDate, endDate, employeeIdOrName, nextPage) {
                 let html = buff.toString();
                 if ( response.statusCode === 200 ) {
                     let result = parseKQ(html);
-                    /**/
+                    /*
                     let fo = fs.createWriteStream(`tmp/step4-inquire-${employeeIdOrName}-${result.curPage}.html`);
                     fo.write(html);
                     fo.end();
-                    /**/
+                    */
                     resolve(result);
                 } else {
                     let msg = `Inquiry HTTP error: ${response.statusMessage}`;
@@ -350,7 +350,7 @@ async function inquire(beginDate, endDate, employeeIdOrName) {
             // \x1b[1A : moves cursor up 1 line
             // \x1b[32m : foreground green
             // \x1b[0m : reset
-            //console.log(`\x1b[1A\x1b[32m${result.curPage}/${result.numPages}\x1b[0m`);
+            console.log(`\x1b[1A\x1b[32m${result.curPage}/${result.numPages}\x1b[0m`);
             if ( result.curPage < result.numPages ) {
                 nextPage = true;
             } else {
@@ -360,14 +360,6 @@ async function inquire(beginDate, endDate, employeeIdOrName) {
         }, e=>{throw e});
     }
     return allItems;
-    /*
-    inquire('2020-12-24', '2021-1-11', 'john'
-    ()=> inquire('2020-12-28', '2021-1-11', 'S2008001', false,
-    ()=> inquire('2020-12-24', '2021-1-6', 'ANNE', false,
-    ()=> inquire('2020-12-25', '2021-1-08', 'LEO MY CHEN', false,
-    ()=> inquire('2021-01-7', '2021-1-11', 'S0203002', false,
-    function() { console.log("All done.") } )))));
-    */
 }
 
 function judge(theDay, signIn, signOut) {
@@ -419,6 +411,10 @@ function findOnePersonRecords(itms, idx1) {
     return {x1: x1, x2: x2};
 }
 
+/**
+ * 
+ * @param {string} eid employee ID
+ */
 function identifyPerson(eid) {
     for (let i = 0; i < wsh.length; i++) {
         if ( wsh[i][1] === eid ) {
@@ -482,15 +478,18 @@ function judge1Day(theDay, signIn, signOut, tl1, tl2) {
     return {status:status, cls:cls};
 }
 
-
-function judgeOne(pr, itms) {
+/**
+ * Traverse on person's records.
+ * @param {*} pr 
+ * @param {*} itms 
+ */
+function traverseOne(pr, itms) {
     let px = identifyPerson(itms[pr.x1][1]);
     if ( px == null ) {
         console.log(`Who is this guy ${itms[pr.x1][1]} ${itms[pr.x1][2]} ?`)
         return;
     }
-    // Traverse on person's records.
-    for (let i = pr.x1; i < pr.x2; i++) {
+    for (let i = pr.x1; i < pr.x2;) {
         let dx = findCalendar(itms[i][3]);
         if ( dx !== null ) {
             let signIn = itms[i][4];
@@ -500,7 +499,7 @@ function judgeOne(pr, itms) {
                 signOut = itms[t2-1][4];
             }
             let r = judge1Day(itms[i][3], signIn, signOut, baseline[dx].tl1, baseline[dx].tl2);
-            let r2 = {dpt:itms[i][0], name:itms[i][2], status:r.status, cls:r.cls, signIn:signIn, singOut:signOut};
+            let r2 = {dpt:itms[i][0], name:itms[i][2], status:r.status, cls:r.cls, signIn:signIn, signOut:signOut};
             records[px][dx] = r2;
             i = t2;
         } else {
@@ -510,14 +509,13 @@ function judgeOne(pr, itms) {
 }
 
 function traverse(itms) {
-    // Sort by EID, Day, Time in ascending order.
     let idx1 = 0;
     while (true) {
         let pr = findOnePersonRecords(itms, idx1);
         if ( !pr ) {
             break;
         }
-        judgeOne(pr, itms);
+        traverseOne(pr, itms);
         idx1 = pr.x2;
     }
 }
@@ -659,20 +657,16 @@ async function askAll() {
     for (let i=0; i < wsh.length; i++) {
         records.push([]);
         for (let j=0; j < baseline.length; j++) {
-            let r = {dpt:wsh[i][0], eid:wsh[i][1], name:wsh[i][2], status:"请假", cls:"absent", signIn:"", singOut:""};
+            let r = {dpt:wsh[i][0], name:wsh[i][2], status:"请假", cls:"absent", signIn:"", signOut:""};
             records[i].push(r);
         }
     }
 
-    // Sort by Day, Department, EID, Time in ascending order.
-//  let cmp = (a, b) => a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[0]!==b[0] ? (a[0]<b[0]?-1:1) : (a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[4]<b[4]?-1:1)));
     // Sort by EID, Day, Time in ascending order.
     let cmp = (a, b) => a[1]!==b[1] ? (a[1]<b[1]?-1:1) : (a[3]!==b[3] ? (a[3]<b[3]?-1:1) : (a[4]<b[4]?-1:1));
     await inquire(baseline[0].day.toLocaleDateString(), baseline[baseline.length-1].day.toLocaleDateString(), '').then(items=>{
         console.log(`inquire ${baseline[0].day.toLocaleDateString()} ~ ${baseline[baseline.length-1].day.toLocaleDateString()} all people`);    // DEBUG
-        //console.log(items);
         items.sort( cmp );
-        console.log(items);
         traverse(items);
     }, e=>{throw e});
 }
@@ -790,8 +784,8 @@ function report(fo) {
         fo.write(`\t\t<td>${dpt}</td><td>${wsh[i][1]}</td><td>${name}</td>`);
         for (let j=0; j < baseline.length; j++) {
             let r = records[i][j];
-            fo.write(`<td title="${r.signIn} ~ ${r.signOut}" class="${r.cls}">${r.status}</td>`);
-            // {dpt:dpt, eid:eid, name:name, status:status, cls:cls, signIn:signIn, singOut:signOut}
+//            fo.write(`<td title="${r.signIn} ~ ${r.signOut}" class="${r.cls}">${r.status}</td>`);
+            fo.write(`<td title="${r.signIn===''&&r.signOut==='' ? '' : r.signIn+' ~ '+r.signOut}" class="${r.cls}">${r.status}</td>`);
         }
         fo.write("\n\t</tr>\n");
     }
@@ -801,25 +795,21 @@ function report(fo) {
     fs.mkdir("./tmp", ()=>{
         console.log("Rock and Roll");
         let t1 = new Date();
-        try {
-            let fo = fs.createWriteStream('tmp/result.html');
-            let dayBegin = '2020-11-9';
-            let dayEnd = '2020-11-10';
-            makeTitle(fo, dayBegin, dayEnd);
-            //askOneByOne().then( ()=>{
-            askAll().then( ()=>{
-                report(fo);
-                fo.end("</table>\n</body>\n</html>");
-                let t2 = new Date();
-                console.log(`${bytesGot} bytes received.`);
-                console.log(`Work from ${t1.toLocaleString()} to ${t2.toLocaleString()} used ${(t2-t1)/1000} seconds.`);
-            }).catch(e=>{
-                console.log("Exception caught.");
-                console.error(e);
-                console.log("Exception reported.");
-            });
-        } catch (e) {
-            console.warn(e);    // Useless? Why?
-        }
+        let fo = fs.createWriteStream('tmp/result.html');
+        let dayBegin = '2020-11-9';
+        let dayEnd = '2021-1-21';
+        makeTitle(fo, dayBegin, dayEnd);
+        //askOneByOne().then( ()=>{
+        askAll().then( ()=>{
+            report(fo);
+            fo.end("</table>\n</body>\n</html>");
+            let t2 = new Date();
+            console.log(`${bytesGot} bytes received.`);
+            console.log(`Work from ${t1.toLocaleString()} to ${t2.toLocaleString()} used ${(t2-t1)/1000} seconds.`);
+        }).catch(e=>{
+            console.log("Exception caught.");
+            console.error(e);
+            console.log("Exception reported.");
+        });
     })
 })();
